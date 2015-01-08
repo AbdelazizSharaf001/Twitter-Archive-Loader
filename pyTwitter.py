@@ -1,4 +1,4 @@
-
+import psycopg2
 import bz2
 import json
 import dataset
@@ -8,11 +8,13 @@ import time
 
 from pprint import pprint
 import profile
+from psycopg2._psycopg import _connect
 
 with open("postgresConnecString.txt", 'r') as f:
     DB_CONNECTIONSTRING = f.readline()
 
-DB = dataset.connect(DB_CONNECTIONSTRING)
+#DB = dataset.connect(DB_CONNECTIONSTRING)
+conn = psycopg2.connect(DB_CONNECTIONSTRING)
 CACHE_DIR = "H:/Twitter datastream/PYTHONCACHE"
 
 def load_bz2_json(filename):
@@ -46,27 +48,37 @@ def load_tweet(tweet, tweets_saved):
         tweet_text = tweet['text']
         tweet_locale = tweet['lang']
         created_at = tweet['created_at']
-        tweet_json = tweet
-        data = {'tweet_id': tweet_id,
-                'tweet_text': tweet_text,
-                'tweet_locale': tweet_locale,
-                'created_at_str': created_at,
-                'date_loaded': datetime.datetime.now(),
-                'tweet_json': json.dumps(tweet_json)}
-        DB['tweets'].upsert(data, ['tweet_id'])
-        tweets_saved += 1
-        if tweets_saved % 100 == 0:
-            print('Saved ' + str(tweets_saved) + ' tweets')
-        return tweets_saved
     except KeyError:
         return tweets_saved
 
+    data = {'tweet_id': tweet_id,
+            'tweet_text': tweet_text,
+            'tweet_locale': tweet_locale,
+            'created_at_str': created_at,
+            'date_loaded': datetime.datetime.now(),
+            'tweet_json': json.dumps(tweet)}
+    cur = conn.cursor()
+    try:
+        cur.execute("""INSERT INTO tweets (tweet_id, tweet_text, tweet_locale, created_at_str, date_loaded, tweet_json)
+                       VALUES (%s, %s, %s, %s, %s, %s);""", (data['tweet_id'], data['tweet_text'], data['tweet_locale'],
+                                                             data['created_at_str'], data['date_loaded'], data['tweet_json']))
+    except:
+        return tweets_saved
+    finally:
+        cur.close()
+
+    tweets_saved += 1
+    if tweets_saved % 100 == 0:
+        print('Saved ' + str(tweets_saved) + ' tweets')
+    return tweets_saved
+
+
 
 def handle_file(filename, retry=False):
-    files_seen = dict([(row['filename'], row['last_seen']) for row in DB['load_log'].all()])
-    if filename in files_seen and retry:
-        print('Already seen this, continuing..')
-        return None
+    #files_seen = dict([(row['filename'], row['last_seen']) for row in DB['load_log'].all()])
+    #if filename in files_seen and retry:
+    #    print('Already seen this, continuing..')
+    #    return None
     print('Loading tweets from file...')
     start = time.time()
     tweets = load_bz2_json(filename)
@@ -78,8 +90,7 @@ def handle_file(filename, retry=False):
     tweets_saved = 0
     for tweet in tweets:
         tweets_saved = load_tweet(tweet, tweets_saved)  # Extracts proper items and places them in database
-    # Attempting to Thread now.
-
+    conn.commit()
     time_elapsed = time.time() - start
     print('Succesfully saved ' + str(len(tweets)) + ' to db in ' + str(time_elapsed) + ' seconds')
     return True
@@ -95,16 +106,17 @@ def main():
             handle_file(filename)
             metadata = {'last_seen': datetime.datetime.now(),
                         'filename': filename}
-            DB['load_log'].upsert(metadata, ['filename'])
-            if files_processed == 1:
-                break
-        if files_processed == 1:
-            break
-
+            #DB['load_log'].upsert(metadata, ['filename'])
+            #if files_processed == 1:
+            #    break
+        #if files_processed == 1:
+        #    break
 
 
 if __name__ == "__main__":
     pprint('Starting work!')
     profile.run('main()')
+
+    conn.close()
 else:  # If running in interpreter Pycharm:
     filename = r"H:\Twitter datastream\PYTHONCACHE\2013\01\01\00\00.json.bz2"
