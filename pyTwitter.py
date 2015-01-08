@@ -1,44 +1,38 @@
-import psycopg2
+"""
+Read the output of a zipped twitter archive from:
+https://archive.org/details/twitterstream
+"""
 import bz2
-import json
-import dataset
-import os
 import datetime
-import time
+import json
+import os
+import profile
+import psycopg2
 
 from pprint import pprint
-import profile
-from psycopg2._psycopg import _connect
+
 
 with open("postgresConnecString.txt", 'r') as f:
     DB_CONNECTIONSTRING = f.readline()
 
-#DB = dataset.connect(DB_CONNECTIONSTRING)
 conn = psycopg2.connect(DB_CONNECTIONSTRING)
 CACHE_DIR = "H:/Twitter datastream/PYTHONCACHE"
 
 def load_bz2_json(filename):
-    """ Takes a filename, extracts the tweets as a list of tweets
-
-    :param filename: path to file.
-    :return: list dictionaries, one for each tweet
-    """
+    """ Takes a bz2 filename, returns the tweets as a list of tweet dictionaries"""
     with open(filename, 'rb') as f:
         s = f.read()
         lines = bz2.decompress(s).split("\n")
     num_lines = len(lines)
     tweets = []
-    # line = lines[0]
     for line in lines:
         try:
             if line == "":
                 num_lines -= 1
                 continue
             tweets.append(json.loads(line))
-        except:
+        except: # I'm kind of lenient as I have millions of tweets, most errors were due to encoding or so)
             continue
-            #print(line)
-    #print(str(len(tweets)) + ' of ' + str(num_lines) + ' lines succesfully converted to tweets')
     return tweets
 
 
@@ -63,37 +57,21 @@ def load_tweet(tweet, tweets_saved):
         cur.execute("""INSERT INTO tweets (tweet_id, tweet_text, tweet_locale, created_at_str, date_loaded, tweet_json)
                        VALUES (%s, %s, %s, %s, %s, %s);""", (data['tweet_id'], data['tweet_text'], data['tweet_locale'],
                                                              data['created_at_str'], data['date_loaded'], data['tweet_json']))
-    except:
+    except: # Kind of lenient for errors, here again.
         return tweets_saved
     finally:
         cur.close()
-
     tweets_saved += 1
-    #if tweets_saved % 1000 == 0:
-    #    print('Saved ' + str(tweets_saved) + ' tweets')
     return tweets_saved
 
 
-
 def handle_file(filename, retry=False):
-    #files_seen = dict([(row['filename'], row['last_seen']) for row in DB['load_log'].all()])
-    #if filename in files_seen and retry:
-    #    print('Already seen this, continuing..')
-    #    return None
-    #print('Loading tweets from file...')
-    start = time.time()
+    """Takes a filename, loads all tweets into a PostgreSQL database"""
     tweets = load_bz2_json(filename)
-    time_elapsed = time.time() - start
-    #('Succesfully loaded file and extracted ' + str(len(tweets)) + ' to list in ' + str(time_elapsed) + ' seconds')
-    #print('Going to save them to database now')
-    #start = time.time()
-    #tweet = tweets[0]
     tweets_saved = 0
     for tweet in tweets:
         tweets_saved = load_tweet(tweet, tweets_saved)  # Extracts proper items and places them in database
     conn.commit()
-    #time_elapsed = time.time() - start
-    #print('Succesfully saved ' + str(len(tweets)) + ' to db in ' + str(time_elapsed) + ' seconds')
     return True
 
 def main():
@@ -105,18 +83,10 @@ def main():
             #print(file)
             print('Starting work on file ' + str(files_processed) + '): ' + filename)
             handle_file(filename)
-            metadata = {'last_seen': datetime.datetime.now(),
-                        'filename': filename}
-            #DB['load_log'].upsert(metadata, ['filename'])
-            #if files_processed == 1:
-            #    break
-        #if files_processed == 1:
-        #    break
-
 
 if __name__ == "__main__":
     pprint('Starting work!')
     profile.run('main()')
     conn.close()
-else:  # If running in interpreter Pycharm:
+else:  # If running interactively in interpreter (Pycharm):
     filename = r"H:\Twitter datastream\PYTHONCACHE\2013\01\01\00\00.json.bz2"
