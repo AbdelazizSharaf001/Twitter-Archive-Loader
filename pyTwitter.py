@@ -9,7 +9,7 @@ import tarfile
 import tempfile
 import sys
 #from thready import threaded
-
+import threading
 
 from pprint import pprint
 
@@ -51,10 +51,19 @@ def scrape_tar_contents(filename):
         print('Starting work on inner file... ' + bz2_filename[-20:] + ': ' + str(bz2_count) + '/' + str(num_bz2_files))
         t_extract = tar.extractfile(bz2_filename)
         data = t_extract.read()
-        txt = bz2.decompress(data)
+        current_line = 1
+        try:
+            txt = bz2.decompress(data)
+        except IOError:
+            error_log = {'Error_stage': 'BZ2 File Input',
+                         'Date_time': datetime.datetime.now(),
+                         'File_TAR': filename,
+                         'File_BZ2': bz2_filename,
+                         'Line_number': current_line,
+                         'Error': str(e)}
+            db['error_log'].upsert(error_log, ['File_TAR', 'File_BZ2', 'Line_number'])
 
         tweet_errors = 0
-        current_line = 1
         num_lines = len(txt.split('\n'))
         for line in txt.split('\n'):
             if current_line % 100 == 0:
