@@ -1,13 +1,13 @@
-__author__ = 'Mathijs'
+
 import bz2
 import json
 import dataset
 import os
 import datetime
 import time
-from time import sleep
-from pprint import pprint
 
+from pprint import pprint
+import profile
 
 with open("postgresConnecString.txt", 'r') as f:
     DB_CONNECTIONSTRING = f.readline()
@@ -38,7 +38,9 @@ def load_bz2_json(filename):
     print(str(len(tweets)) + ' of ' + str(num_lines) + ' lines succesfully converted to tweets')
     return tweets
 
-def extract_from_tweet(tweet, tweets_saved):
+
+def load_tweet(tweet, tweets_saved):
+    """Takes a tweet (dictionary) and upserts its contents to a PostgreSQL database"""
     try:
         tweet_id = tweet['id']
         tweet_text = tweet['text']
@@ -59,25 +61,24 @@ def extract_from_tweet(tweet, tweets_saved):
     except KeyError:
         return tweets_saved
 
-def handle_file(filename):
-    files_seen = [filename for filename in DB['tweet_log']]
-    print('Loading tweets from file: ' + filename[34:])
+
+def handle_file(filename, retry=False):
+    files_seen = dict([(row['filename'], row['last_seen']) for row in DB['load_log'].all()])
+    if filename in files_seen and retry:
+        print('Already seen this, continuing..')
+        return None
+    print('Loading tweets from file...')
     start = time.time()
     tweets = load_bz2_json(filename)
     time_elapsed = time.time() - start
     print('Succesfully loaded file and extracted ' + str(len(tweets)) + ' to list in ' + str(time_elapsed) + ' seconds')
-    sleep(2)
-
     print('Going to save them to database now')
     start = time.time()
     #tweet = tweets[0]
     tweets_saved = 0
     for tweet in tweets:
-        tweets_saved = extract_from_tweet(tweet, tweets_saved) # Extracts proper items and places them in database
+        tweets_saved = load_tweet(tweet, tweets_saved)  # Extracts proper items and places them in database
     # Attempting to Thread now.
-
-
-
 
     time_elapsed = time.time() - start
     print('Succesfully saved ' + str(len(tweets)) + ' to db in ' + str(time_elapsed) + ' seconds')
@@ -89,10 +90,12 @@ def main():
         for file in files:
             files_processed +=1
             filename = os.path.join(root, file)
+            print(file)
+            print('Starting work on file: ' + filename)
             handle_file(filename)
             metadata = {'last_seen': datetime.datetime.now(),
                         'filename': filename}
-            DB['tweet_log'].upsert(metadata, ['filename'])
+            DB['load_log'].upsert(metadata, ['filename'])
             if files_processed == 1:
                 break
         if files_processed == 1:
@@ -102,6 +105,6 @@ def main():
 
 if __name__ == "__main__":
     pprint('Starting work!')
-    main()
-else:
+    profile.run('main()')
+else:  # If running in interpreter Pycharm:
     filename = r"H:\Twitter datastream\PYTHONCACHE\2013\01\01\00\00.json.bz2"
