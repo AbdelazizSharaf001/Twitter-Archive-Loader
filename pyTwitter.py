@@ -9,42 +9,36 @@ import tarfile
 import tempfile
 import sys
 #from thready import threaded
-
-
 from pprint import pprint
 
+filename = r"H:\Twitter datastream\PYTHONCACHE\2013\01\01\00\00.json.bz2"
+def load_bz2_json(filename):
+    """ Takes a filename, extracts the tweets as a list of tweets
 
-
-def get_inner_filenames(tar, tar_filename, attempt_from_db=True):
-    """ Wrapper to try and retrieve saved file names for a specific TAR file instead of determining it every time.
-    :param tar:
-    :return:
+    :param filename: path to file.
+    :return: list dictionaries, one for each tweet
     """
-    if attempt_from_db:
-        inner_files_txt = db['tar_file_names'].find_one(tar_filename=tar_filename)
-        if inner_files_txt is not None:
-            inner_files = inner_files_txt['tar_files_inside'].split("; ")
-            print('Loaded filenames from the database...')
-            return inner_files
+    with open(filename, 'rb') as f:
+        s = f.read()
+        lines = bz2.decompress(s).split("\n")
+    num_lines = len(lines)
+    tweets = []
+    # line = lines[0]
+    for line in lines:
+        try:
+            if line == "":
+                num_lines -= 1
+                continue
+            tweets.append(json.loads(line))
+        except:
+            print(line)
+    print(str(len(tweets)) + ' of ' + str(num_lines) + ' lines succesfully converted to tweets')
+    return tweets
 
-    # Can't find it in DB, returning
-    print('Loading names from tar file:' + tar_filename[:6] + '...' + tar_filename[-20:])
-    inner_files = [filename for filename in tar.getnames() if filename.endswith('.bz2')]
-    data = {'tar_filename': tar_filename,
-            'tar_files_inside': "; ".join(inner_files)}
-    print(data)
-    print('Loaded filenames from the file...')
-    db['tar_file_names'].upsert(data, ['tar_filename'])
-    print('Saved filenames to the database for next time')
-    return inner_files
+a = load_bz2_json(filename)
 
-# get_inner_filenames(tar, filename)
 
-def scrape_tar_contents(filename):
-    tar = tarfile.open(filename, 'r')
-    tar_bz2_names = get_inner_filenames(tar, filename, True)
 
-    num_bz2_files = len(tar_bz2_names)
     bz2_count = 1
     print('Starting work on file... ' + filename[-20:])
     for bz2_filename in tar_bz2_names:
@@ -52,6 +46,7 @@ def scrape_tar_contents(filename):
         t_extract = tar.extractfile(bz2_filename)
         data = t_extract.read()
         txt = bz2.decompress(data)
+        bz2.BZ2File()
 
         tweet_errors = 0
         current_line = 1
@@ -117,6 +112,18 @@ if __name__ == "__main__":
     with open("postgresConnecString.txt", 'r') as f:
         db_connectionstring = f.readline()
     db = dataset.connect(db_connectionstring)
-
+    CACHE_DIR = "H:/Twitter datastream/PYTHONCACHE"
     filename = r'H:/Twitter datastream/Sourcefiles/archiveteam-twitter-stream-2013-01.tar'
     scrape_tar_contents(filename)
+
+
+    files_processed = 0
+    for subdir, dirs, files in os.walk(CACHE_DIR):
+        for file in files:
+            files_processed += 1
+            with open(file,'r') as f:
+                lines = f.readlines()
+            if files_processed == 2:
+                break
+        if files_processed == 2:
+            break
