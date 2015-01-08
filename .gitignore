@@ -44,5 +44,3 @@ Temporary Items
 postresConnecString.txt
 *.xml
 *.iml
-*.exe
-*.txt
