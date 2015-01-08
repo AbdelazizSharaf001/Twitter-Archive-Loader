@@ -36,8 +36,9 @@ def load_bz2_json(filename):
                 continue
             tweets.append(json.loads(line))
         except:
-            print(line)
-    print(str(len(tweets)) + ' of ' + str(num_lines) + ' lines succesfully converted to tweets')
+            continue
+            #print(line)
+    #print(str(len(tweets)) + ' of ' + str(num_lines) + ' lines succesfully converted to tweets')
     return tweets
 
 
@@ -68,8 +69,8 @@ def load_tweet(tweet, tweets_saved):
         cur.close()
 
     tweets_saved += 1
-    if tweets_saved % 100 == 0:
-        print('Saved ' + str(tweets_saved) + ' tweets')
+    #if tweets_saved % 1000 == 0:
+    #    print('Saved ' + str(tweets_saved) + ' tweets')
     return tweets_saved
 
 
@@ -79,20 +80,20 @@ def handle_file(filename, retry=False):
     #if filename in files_seen and retry:
     #    print('Already seen this, continuing..')
     #    return None
-    print('Loading tweets from file...')
+    #print('Loading tweets from file...')
     start = time.time()
     tweets = load_bz2_json(filename)
     time_elapsed = time.time() - start
-    print('Succesfully loaded file and extracted ' + str(len(tweets)) + ' to list in ' + str(time_elapsed) + ' seconds')
-    print('Going to save them to database now')
-    start = time.time()
+    #('Succesfully loaded file and extracted ' + str(len(tweets)) + ' to list in ' + str(time_elapsed) + ' seconds')
+    #print('Going to save them to database now')
+    #start = time.time()
     #tweet = tweets[0]
     tweets_saved = 0
     for tweet in tweets:
         tweets_saved = load_tweet(tweet, tweets_saved)  # Extracts proper items and places them in database
     conn.commit()
-    time_elapsed = time.time() - start
-    print('Succesfully saved ' + str(len(tweets)) + ' to db in ' + str(time_elapsed) + ' seconds')
+    #time_elapsed = time.time() - start
+    #print('Succesfully saved ' + str(len(tweets)) + ' to db in ' + str(time_elapsed) + ' seconds')
     return True
 
 def main():
@@ -101,8 +102,8 @@ def main():
         for file in files:
             files_processed +=1
             filename = os.path.join(root, file)
-            print(file)
-            print('Starting work on file: ' + filename)
+            #print(file)
+            print('Starting work on file ' + str(files_processed) + '): ' + filename)
             handle_file(filename)
             metadata = {'last_seen': datetime.datetime.now(),
                         'filename': filename}
@@ -116,7 +117,6 @@ def main():
 if __name__ == "__main__":
     pprint('Starting work!')
     profile.run('main()')
-
     conn.close()
 else:  # If running in interpreter Pycharm:
     filename = r"H:\Twitter datastream\PYTHONCACHE\2013\01\01\00\00.json.bz2"
