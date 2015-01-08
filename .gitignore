@@ -44,3 +44,7 @@ Temporary Items
 postresConnecString.txt
 *.xml
 *.iml
+*.txt
+*.exe
+*.html
+*.log

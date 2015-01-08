@@ -2,16 +2,19 @@ __author__ = 'Mathijs'
 import bz2
 import json
 import dataset
-import psycopg2
 import os
 import datetime
-import tarfile
-import tempfile
-import sys
-#from thready import threaded
+import time
+from time import sleep
 from pprint import pprint
 
-filename = r"H:\Twitter datastream\PYTHONCACHE\2013\01\01\00\00.json.bz2"
+
+with open("postgresConnecString.txt", 'r') as f:
+    DB_CONNECTIONSTRING = f.readline()
+
+DB = dataset.connect(DB_CONNECTIONSTRING)
+CACHE_DIR = "H:/Twitter datastream/PYTHONCACHE"
+
 def load_bz2_json(filename):
     """ Takes a filename, extracts the tweets as a list of tweets
 
@@ -35,95 +38,70 @@ def load_bz2_json(filename):
     print(str(len(tweets)) + ' of ' + str(num_lines) + ' lines succesfully converted to tweets')
     return tweets
 
-a = load_bz2_json(filename)
+def extract_from_tweet(tweet, tweets_saved):
+    try:
+        tweet_id = tweet['id']
+        tweet_text = tweet['text']
+        tweet_locale = tweet['lang']
+        created_at = tweet['created_at']
+        tweet_json = tweet
+        data = {'tweet_id': tweet_id,
+                'tweet_text': tweet_text,
+                'tweet_locale': tweet_locale,
+                'created_at_str': created_at,
+                'date_loaded': datetime.datetime.now(),
+                'tweet_json': json.dumps(tweet_json)}
+        DB['tweets'].upsert(data, ['tweet_id'])
+        tweets_saved += 1
+        if tweets_saved % 100 == 0:
+            print('Saved ' + str(tweets_saved) + ' tweets')
+        return tweets_saved
+    except KeyError:
+        return tweets_saved
+
+def handle_file(filename):
+    files_seen = [filename for filename in DB['tweet_log']]
+    print('Loading tweets from file: ' + filename[34:])
+    start = time.time()
+    tweets = load_bz2_json(filename)
+    time_elapsed = time.time() - start
+    print('Succesfully loaded file and extracted ' + str(len(tweets)) + ' to list in ' + str(time_elapsed) + ' seconds')
+    sleep(2)
+
+    print('Going to save them to database now')
+    start = time.time()
+    #tweet = tweets[0]
+    tweets_saved = 0
+    for tweet in tweets:
+        tweets_saved = extract_from_tweet(tweet, tweets_saved) # Extracts proper items and places them in database
+    # Attempting to Thread now.
 
 
 
-    bz2_count = 1
-    print('Starting work on file... ' + filename[-20:])
-    for bz2_filename in tar_bz2_names:
-        print('Starting work on inner file... ' + bz2_filename[-20:] + ': ' + str(bz2_count) + '/' + str(num_bz2_files))
-        t_extract = tar.extractfile(bz2_filename)
-        data = t_extract.read()
-        txt = bz2.decompress(data)
-        bz2.BZ2File()
 
-        tweet_errors = 0
-        current_line = 1
-        num_lines = len(txt.split('\n'))
-        for line in txt.split('\n'):
-            if current_line % 100 == 0:
-                print('Working on line ' + str(current_line) + '/' + str(num_lines))
-            try:
-                if line == "":
-                    continue
-                try:
-                    tweet = json.loads(line)
-                except ValueError, e:
-                    error_log = {'Date_time': datetime.datetime.now(),
-                             'File_TAR': filename,
-                             'File_BZ2': bz2_filename,
-                             'Line_number': current_line,
-                             'Line': line,
-                             'Error': str(e)}
-                    tweet_errors += 1
-                    db['error_log'].upsert(error_log, ['File_TAR', 'File_BZ2', 'Line_number'])
-                    print('Error occured, now at ' + str(tweet_errors))
-                try:
-                    tweet_id = tweet['id']
-                    tweet_text = tweet['text']
-                    tweet_locale = tweet['lang']
-                    created_at = tweet['created_at']
-                    tweet_json = tweet
-                    data = {'tweet_id': tweet_id,
-                            'tweet_text': tweet_text,
-                            'tweet_locale': tweet_locale,
-                            'created_at_str': created_at,
-                            'date_loaded': datetime.datetime.now(),
-                            'tweet_json': tweet_json}
-                    db['tweets'].upsert(data, ['tweet_id'])
-                except KeyError, e:
-                    error_log = {'Date_time': datetime.datetime.now(),
-                             'File_TAR': filename,
-                             'File_BZ2': bz2_filename,
-                             'Line_number': current_line,
-                             'Line': line,
-                             'Error': str(e)}
-                    tweet_errors += 1
-                    db['error_log'].upsert(error_log, ['File_TAR', 'File_BZ2', 'Line_number'])
-                    print('Error occured, now at ' + str(tweet_errors))
-                    continue
-            except ValueError, e:
-                error_log = {'Date_time': datetime.datetime.now(),
-                             'File_TAR': filename,
-                             'File_BZ2': bz2_filename,
-                             'Line_number': current_line,
-                             'Error': str(e)}
-                tweet_errors += 1
-                db['error_log'].upsert(error_log, ['File_TAR', 'File_BZ2', 'Line_number'])
-                print('Error occured, now at ' + str(tweet_errors))
-            current_line += 1
-        bz2_count += 1
-    print('Completed!')
-    return 'Complete!'
+    time_elapsed = time.time() - start
+    print('Succesfully saved ' + str(len(tweets)) + ' to db in ' + str(time_elapsed) + ' seconds')
+    return True
+
+def main():
+    files_processed = 0
+    for root, dirs, files in os.walk(CACHE_DIR):
+        for file in files:
+            files_processed +=1
+            filename = os.path.join(root, file)
+            handle_file(filename)
+            metadata = {'last_seen': datetime.datetime.now(),
+                        'filename': filename}
+            DB['tweet_log'].upsert(metadata, ['filename'])
+            if files_processed == 1:
+                break
+        if files_processed == 1:
+            break
+
 
 
 if __name__ == "__main__":
-    with open("postgresConnecString.txt", 'r') as f:
-        db_connectionstring = f.readline()
-    db = dataset.connect(db_connectionstring)
-    CACHE_DIR = "H:/Twitter datastream/PYTHONCACHE"
-    filename = r'H:/Twitter datastream/Sourcefiles/archiveteam-twitter-stream-2013-01.tar'
-    scrape_tar_contents(filename)
-
-
-    files_processed = 0
-    for subdir, dirs, files in os.walk(CACHE_DIR):
-        for file in files:
-            files_processed += 1
-            with open(file,'r') as f:
-                lines = f.readlines()
-            if files_processed == 2:
-                break
-        if files_processed == 2:
-            break
+    pprint('Starting work!')
+    main()
+else:
+    filename = r"H:\Twitter datastream\PYTHONCACHE\2013\01\01\00\00.json.bz2"
