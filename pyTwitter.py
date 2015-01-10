@@ -54,7 +54,7 @@ def load_tweet(tweet, tweets_saved):
             'tweet_json': json.dumps(tweet)}
     cur = conn.cursor()
     try:
-        cur.execute("""INSERT INTO tweets (tweet_id, tweet_text, tweet_locale, created_at_str, date_loaded, tweet_json)
+        cur.execute("""INSERT INTO tweets_test (tweet_id, tweet_text, tweet_locale, created_at_str, date_loaded, tweet_json)
                        VALUES (%s, %s, %s, %s, %s, %s);""", (data['tweet_id'], data['tweet_text'], data['tweet_locale'],
                                                              data['created_at_str'], data['date_loaded'], data['tweet_json']))
     except: # Kind of lenient for errors, here again.
@@ -83,6 +83,10 @@ def main():
             #print(file)
             print('Starting work on file ' + str(files_processed) + '): ' + filename)
             handle_file(filename)
+            if files_processed == 1000:
+                break
+        if files_processed == 1000:
+            break
 
 if __name__ == "__main__":
     pprint('Starting work!')
