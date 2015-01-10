@@ -44,7 +44,7 @@ def load_tweet(tweet, tweets_saved):
         tweet_locale = tweet['lang']
         created_at = tweet['created_at']
     except KeyError:
-        return tweets_saved
+        return {}, tweets_saved
 
     data = {'tweet_id': tweet_id,
             'tweet_text': tweet_text,
@@ -52,45 +52,47 @@ def load_tweet(tweet, tweets_saved):
             'created_at_str': created_at,
             'date_loaded': datetime.datetime.now(),
             'tweet_json': json.dumps(tweet)}
-    cur = conn.cursor()
-    try:
-        cur.execute("""INSERT INTO tweets_test (tweet_id, tweet_text, tweet_locale, created_at_str, date_loaded, tweet_json)
-                       VALUES (%s, %s, %s, %s, %s, %s);""", (data['tweet_id'], data['tweet_text'], data['tweet_locale'],
-                                                             data['created_at_str'], data['date_loaded'], data['tweet_json']))
-    except: # Kind of lenient for errors, here again.
-        return tweets_saved
-    finally:
-        cur.close()
+
     tweets_saved += 1
-    return tweets_saved
+    return data, tweets_saved
 
 
-def handle_file(filename, retry=False):
+def handle_file(filename, cur, retry=False):
     """Takes a filename, loads all tweets into a PostgreSQL database"""
     tweets = load_bz2_json(filename)
+    tweet_dicts = []
     tweets_saved = 0
     for tweet in tweets:
-        tweets_saved = load_tweet(tweet, tweets_saved)  # Extracts proper items and places them in database
-    conn.commit()
+        tweet_dict, tweets_saved = load_tweet(tweet, tweets_saved)  # Extracts proper items and places them in database
+        if tweet_dict:
+            tweet_dicts.append(tweet_dict)
+
+    tup = [(d['tweet_id'], d['tweet_text'], d['tweet_locale'],
+            d['created_at_str'], d['date_loaded'], d['tweet_json']) for d in tweet_dicts]
+    args_str = ','.join(cur.mogrify("(%s,%s,%s,%s,%s,%s)", x) for x in tup)
+    cur.execute("INSERT INTO tweets_test (tweet_id, tweet_text, tweet_locale, created_at_str, date_loaded, tweet_json) VALUES " + args_str)
     return True
 
 def main():
     files_processed = 0
     for root, dirs, files in os.walk(CACHE_DIR):
         for file in files:
-            files_processed +=1
+            files_processed += 1
             filename = os.path.join(root, file)
-            #print(file)
+
+            cur = conn.cursor()
             print('Starting work on file ' + str(files_processed) + '): ' + filename)
-            handle_file(filename)
-            if files_processed == 1000:
+            handle_file(filename, cur)
+            if files_processed % 10 == 0:
+                conn.commit()
+            if files_processed == 10000:
                 break
-        if files_processed == 1000:
+        if files_processed == 10000:
             break
 
 if __name__ == "__main__":
     pprint('Starting work!')
-    profile.run('main()')
+    profile.run('main()', sort='tottime')
     conn.close()
 else:  # If running interactively in interpreter (Pycharm):
     filename = r"H:\Twitter datastream\PYTHONCACHE\2013\01\01\00\00.json.bz2"
