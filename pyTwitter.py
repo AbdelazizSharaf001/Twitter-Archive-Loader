@@ -85,9 +85,9 @@ def main():
             handle_file(filename, cur)
             if files_processed % 10 == 0:
                 conn.commit()
-            if files_processed == 10000:
+            if files_processed == 1000:
                 break
-        if files_processed == 10000:
+        if files_processed == 1000:
             break
 
 if __name__ == "__main__":
