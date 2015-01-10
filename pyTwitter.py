@@ -93,6 +93,7 @@ def main():
 if __name__ == "__main__":
     pprint('Starting work!')
     profile.run('main()', sort='tottime')
+    # Changed logging on table to off
     conn.close()
 else:  # If running interactively in interpreter (Pycharm):
     filename = r"H:\Twitter datastream\PYTHONCACHE\2013\01\01\00\00.json.bz2"
